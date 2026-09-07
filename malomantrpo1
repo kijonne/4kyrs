@@ -1,0 +1,331 @@
+Ок, тогда WPF. Короткий рабочий вариант.
+
+dotnet new wpf -n UserManagerWpf -f net10.0-windows
+cd UserManagerWpf
+---
+
+### Models/User.cs
+namespace UserManagerWpf.Models;
+
+public class User
+{
+    public int Id { get; set; }
+    public string Username { get; set; } = "";
+    public string PasswordHash { get; set; } = "";
+    public string Email { get; set; } = "";
+}
+### `Services/UserService.cs
+``csharp
+using System.IO;
+using System.Text;
+using System.Text.Json;
+using UserManagerWpf.Models;
+
+namespace UserManagerWpf.Services;
+
+public class UserService
+{
+    private List<User> _users = new();
+    private int _nextId = 1;
+    private readonly string _file;
+
+    public UserService()
+    {
+        _file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "users.json");
+        Load();
+        if (_users.Count == 0)
+            Register("admin", "admin123", "admin@mail.com");
+    }
+
+    static string Hash(string p) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(p));
+
+    public bool Register(string username, string password, string email)
+    {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            return false;
+        if (_users.Any(u => u.Username == username))
+            return false;
+
+        _users.Add(new User
+        {
+            Id = _nextId++,
+            Username = username.Trim(),
+            PasswordHash = Hash(password),
+            Email = email?.Trim() ?? ""
+        });
+        Save();
+        return true;
+    }
+
+    public User? Login(string username, string password)
+    {
+        var user = _users.FirstOrDefault(u => u.Username == username);
+        if (user == null) return null;
+        return user.PasswordHash == Hash(password) ? user : null;
+    }
+
+    public List<User> GetAll() => _users.ToList();
+
+    public void Export(string path) =>
+        File.WriteAllText(path, JsonSerializer.Serialize(_users, new JsonSerializerOptions { WriteIndented = true }));
+
+    public bool Import(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return false;
+            var list = JsonSerializer.Deserialize<List<User>>(File.ReadAllText(path));
+            if (list == null) return false;
+            _users = list;
+            _nextId = _users.Count > 0 ? _users.Max(u => u.Id) + 1 : 1;
+            Save();
+            return true;
+        }
+        catch { return false; }
+    }
+
+    void Save() =>
+        File.WriteAllText(_file, JsonSerializer.Serialize(_users, new JsonSerializerOptions { WriteIndented = true }));
+
+    void Load()
+    {
+        if (!File.Exists(_file)) return;
+        try
+        {
+            _users = JsonSerializer.Deserialize<List<User>>(File.ReadAllText(_file)) ?? new();
+            _nextId = _users.Count > 0 ? _users.Max(u => u.Id) + 1 : 1;
+        }
+        catch { }
+    }
+}
+
+### `LoginWindow.xaml`
+xml
+<Window x:Class="UserManagerWpf.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Вход" Height="280" Width="360" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Авторизация" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+        <TextBlock Grid.Row="1" Text="Логин"/>
+        <TextBox x:Name="UsernameBox" Grid.Row="2" Margin="0,4,0,10" Height="28"/>
+        <TextBlock Grid.Row="3" Text="Пароль"/>
+        <PasswordBox x:Name="PasswordBox" Grid.Row="4" Margin="0,4,0,15" Height="28"/>
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Регистрация" Width="110" Margin="0,0,8,0" Click="Register_Click"/>
+            <Button Content="Войти" Width="90" Click="Login_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
+
+### `LoginWindow.xaml.cs`
+csharp
+using System.Windows;
+using UserManagerWpf.Services;
+
+namespace UserManagerWpf;
+
+public partial class LoginWindow : Window
+{
+    private readonly UserService _svc = new();
+
+    public LoginWindow()
+    {
+        InitializeComponent();
+    }
+
+    private void Login_Click(object sender, RoutedEventArgs e)
+    {
+        var user = _svc.Login(UsernameBox.Text, PasswordBox.Password);
+        if (user == null)
+        {
+            MessageBox.Show("Неверный логин или пароль", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var main = new MainWindow(_svc, user.Username);
+        main.Show();
+        Close();
+    }
+
+    private void Register_Click(object sender, RoutedEventArgs e)
+    {
+        var reg = new RegisterWindow(_svc);
+        reg.Owner = this;
+        reg.ShowDialog();
+    }
+}
+
+### `RegisterWindow.xaml`
+xml
+<Window x:Class="UserManagerWpf.RegisterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Регистрация" Height="320" Width="360" WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Регистрация" FontSize="18" FontWeight="Bold" Margin="0,0,0,12"/>
+        <TextBlock Grid.Row="1" Text="Логин"/>
+        <TextBox x:Name="UsernameBox" Grid.Row="2" Margin="0,4,0,8" Height="28"/>
+        <TextBlock Grid.Row="3" Text="Пароль"/>
+        <PasswordBox x:Name="PasswordBox" Grid.Row="4" Margin="0,4,0,8" Height="28"/>
+        <TextBlock Grid.Row="5" Text="Email"/>
+        <TextBox x:Name="EmailBox" Grid.Row="6" Margin="0,4,0,15" Height="28"/>
+        <Button Grid.Row="7" Content="Зарегистрироваться" HorizontalAlignment="Right" Width="150" Click="Register_Click"/>
+    </Grid>
+</Window>
+
+### `RegisterWindow.xaml.cs`
+csharp
+using System.Windows;
+using UserManagerWpf.Services;
+
+namespace UserManagerWpf;
+
+public partial class RegisterWindow : Window
+{
+    private readonly UserService _svc;
+
+    public RegisterWindow(UserService svc)
+    {
+        InitializeComponent();
+        _svc = svc;
+    }
+
+    private void Register_Click(object sender, RoutedEventArgs e)
+    {
+        if (_svc.Register(UsernameBox.Text, PasswordBox.Password, EmailBox.Text))
+        {
+            MessageBox.Show("Регистрация успешна", "ОК", MessageBoxButton.OK, MessageBoxImage.Information);
+            Close();
+        }
+        else
+        {
+            MessageBox.Show("Логин занят или пустые поля", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+}
+
+### `MainWindow.xaml`
+xml
+<Window x:Class="UserManagerWpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Пользователи" Height="450" Width="650" WindowStartupLocation="CenterScreen">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock x:Name="UserLabel" VerticalAlignment="Center" Margin="0,0,15,0"/>
+            <Button Content="Обновить" Width="90" Margin="0,0,8,0" Click="Refresh_Click"/>
+            <Button Content="Экспорт" Width="90" Margin="0,0,8,0" Click="Export_Click"/>
+            <Button Content="Импорт" Width="90" Margin="0,0,8,0" Click="Import_Click"/>
+            <Button Content="Выход" Width="90" Click="Logout_Click"/>
+        </StackPanel>
+        <DataGrid x:Name="UsersGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserAddRows="False" HeadersVisibility="Column">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="60"/>
+                <DataGridTextColumn Header="Логин" Binding="{Binding Username}" Width="*"/>
+                <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>
+
+### `MainWindow.xaml.cs`
+csharp
+using System.Windows;
+using Microsoft.Win32;
+using UserManagerWpf.Services;
+
+namespace UserManagerWpf;
+
+public partial class MainWindow : Window
+{
+    private readonly UserService _svc;
+
+    public MainWindow(UserService svc, string currentUser)
+    {
+        InitializeComponent();
+        _svc = svc;
+        UserLabel.Text = $"Вы вошли: {currentUser}";
+        LoadUsers();
+    }
+
+    private void LoadUsers() => UsersGrid.ItemsSource = _svc.GetAll();
+
+    private void Refresh_Click(object sender, RoutedEventArgs e) => LoadUsers();
+
+    private void Export_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new SaveFileDialog { Filter = "JSON|*.json", FileName = "users.json" };
+        if (dlg.ShowDialog() == true)
+        {
+            _svc.Export(dlg.FileName);
+            MessageBox.Show("Экспорт выполнен");
+        }
+    }
+
+    private void Import_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Filter = "JSON|*.json" };
+        if (dlg.ShowDialog() == true)
+        {
+            MessageBox.Show(_svc.Import(dlg.FileName) ? "Импорт выполнен" : "Ошибка импорта");
+            LoadUsers();
+        }
+    }
+
+    private void Logout_Click(object sender, RoutedEventArgs e)
+    {
+        new LoginWindow().Show();
+        Close();
+    }
+}
+
+### `App.xaml.cs` — стартовое окно
+csharp
+using System.Windows;
+
+namespace UserManagerWpf;
+
+public partial class App : Application
+{
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        new LoginWindow().Show();
+    }
+}
+
+В `App.xaml` убери `StartupUri="MainWindow.xaml"` (или закомментируй), чтобы открывалось окно входа:
+xml
+<Application x:Class="UserManagerWpf.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources/>
+</Application>
+`
+
+---
+
+Запуск: `dotnet run`  
+Логин: `admin` / `admin123`
+
+Есть: вход, регистрация, список, импорт/экспорт JSON — всё на WPF.
