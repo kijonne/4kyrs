@@ -1,0 +1,70 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Задаем интервал x
+x = np.linspace(0, 10 * np.pi, 1000)
+
+# Определяем функцию через def
+def f(x):
+    return 2 * np.sin(10 * x) + x * np.cos(x)
+
+# ---------------------------------------------------
+# 1) РАСПОЛОЖЕНИЕ РЯДОМ (1 строка, 2 колонки)
+# ---------------------------------------------------
+fig1 = plt.figure(figsize=(15, 5), facecolor='lightblue')
+fig1.suptitle('Вариант 4: f(x) = 2sin(10x) + xcos(x) — графики рядом', fontsize=20)
+
+# Левый график (через def)
+ax1 = fig1.add_subplot(121)
+ax1.plot(x, f(x), marker='*', markersize=6, linestyle='-', color='red', label='через def')
+ax1.set_title('График 1 (def)', fontsize=16)
+ax1.set_xlabel('x', fontsize=14)
+ax1.set_ylabel('f(x)', fontsize=14)
+ax1.tick_params(labelsize=12)
+ax1.legend(fontsize=12)
+ax1.grid(True, linestyle=':')
+
+# Правый график (выражение в plot)
+ax2 = fig1.add_subplot(122)
+ax2.plot(x, 2 * np.sin(10 * x) + x * np.cos(x), marker='o', markersize=6,
+         linestyle='--', color='blue', label='в plot()')
+ax2.set_title('График 2 (plot)', fontsize=16)
+ax2.set_xlabel('x', fontsize=14)
+ax2.set_ylabel('f(x)', fontsize=14)
+ax2.tick_params(labelsize=12)
+ax2.legend(fontsize=12)
+ax2.grid(True, linestyle='-')
+
+plt.tight_layout()
+
+# ---------------------------------------------------
+# 2) РАСПОЛОЖЕНИЕ ДРУГ ПОД ДРУГОМ (2 строки, 1 колонка)
+# ---------------------------------------------------
+fig2 = plt.figure(figsize=(10, 10), facecolor='lightgreen')
+fig2.suptitle('Вариант 4: f(x) = 2sin(10x) + xcos(x) — графики друг под другом', fontsize=20)
+
+# Верхний график (через def)
+ax3 = fig2.add_subplot(211)
+ax3.plot(x, f(x), marker='s', markersize=5, linestyle='-', color='green', label='через def')
+ax3.set_title('График 1 (def)', fontsize=16)
+ax3.set_xlabel('x', fontsize=14)
+ax3.set_ylabel('f(x)', fontsize=14)
+ax3.tick_params(labelsize=12)
+ax3.legend(fontsize=12)
+ax3.grid(True, linestyle=':')
+
+# Нижний график (выражение в plot)
+ax4 = fig2.add_subplot(212)
+ax4.plot(x, 2 * np.sin(10 * x) + x * np.cos(x), marker='^', markersize=5,
+         linestyle='--', color='orange', label='в plot()')
+ax4.set_title('График 2 (plot)', fontsize=16)
+ax4.set_xlabel('x', fontsize=14)
+ax4.set_ylabel('f(x)', fontsize=14)
+ax4.tick_params(labelsize=12)
+ax4.legend(fontsize=12)
+ax4.grid(True, linestyle='-')
+
+plt.tight_layout()
+
+# Показать оба окна с графиками
+plt.show()
