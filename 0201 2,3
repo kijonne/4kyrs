@@ -1,0 +1,205 @@
+Да 😄 Вот **простой вариант на C#**, без заумностей.
+
+## Задание 2 — парное программирование
+
+Сделай проект **Windows Forms App**. В `Form1.cs` вставь:
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Windows.Forms;
+
+namespace Lab1
+{
+    public partial class Form1 : Form
+    {
+        // Список пользователей
+        List<string> users = new List<string>();
+
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        // Регистрация
+        private void btnRegister_Click(object sender, EventArgs e)
+        {
+            string login = txtLogin.Text;
+            string password = txtPassword.Text;
+
+            if (login == "" || password == "")
+            {
+                MessageBox.Show("Заполните все поля");
+                return;
+            }
+
+            if (users.Contains(login))
+            {
+                MessageBox.Show("Такой пользователь уже существует");
+                return;
+            }
+
+            users.Add(login);
+
+            MessageBox.Show("Пользователь зарегистрирован");
+            ShowUsers();
+        }
+
+        // Авторизация
+        private void btnLogin_Click(object sender, EventArgs e)
+        {
+            string login = txtLogin.Text;
+
+            if (users.Contains(login))
+            {
+                MessageBox.Show("Авторизация успешна");
+            }
+            else
+            {
+                MessageBox.Show("Пользователь не найден");
+            }
+        }
+
+        // Вывод списка пользователей
+        private void ShowUsers()
+        {
+            listUsers.Items.Clear();
+
+            foreach (string user in users)
+            {
+                listUsers.Items.Add(user);
+            }
+        }
+    }
+}
+```
+
+На форме создай:
+
+* `TextBox` → **txtLogin**
+* `TextBox` → **txtPassword**
+* `Button` → **btnRegister**, текст: `Регистрация`
+* `Button` → **btnLogin**, текст: `Войти`
+* `ListBox` → **listUsers**
+
+И два раза нажми на кнопки, чтобы Visual Studio создала обработчики `btnRegister_Click` и `btnLogin_Click`.
+
+Для отчёта по парному программированию можно написать:
+
+> В ходе работы участники поочерёдно выполняли роли ведущего и штурмана. Ведущий писал код приложения, а штурман контролировал правильность написания кода и указывал на найденные ошибки. После нескольких итераций участники поменялись ролями.
+
+---
+
+## Задание 3 — пинг-понг программирование
+
+Для этого сделаем отдельный тестовый проект **MSTest**.
+
+В основной программе добавь класс `UserManager.cs`:
+
+```csharp
+using System.Collections.Generic;
+
+namespace Lab1
+{
+    public class UserManager
+    {
+        private List<string> users = new List<string>();
+
+        public bool Register(string login)
+        {
+            if (login == "")
+                return false;
+
+            if (users.Contains(login))
+                return false;
+
+            users.Add(login);
+            return true;
+        }
+
+        public bool Login(string login)
+        {
+            return users.Contains(login);
+        }
+    }
+}
+```
+
+А в тестовом проекте создай `UserManagerTests.cs`:
+
+```csharp
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Lab1Tests
+{
+    [TestClass]
+    public class UserManagerTests
+    {
+        [TestMethod]
+        public void RegistrationTest()
+        {
+            UserManager manager = new UserManager();
+
+            bool result = manager.Register("Ivan");
+
+            Assert.IsTrue(result);
+        }
+
+        [TestMethod]
+        public void DuplicateRegistrationTest()
+        {
+            UserManager manager = new UserManager();
+
+            manager.Register("Ivan");
+
+            bool result = manager.Register("Ivan");
+
+            Assert.IsFalse(result);
+        }
+
+        [TestMethod]
+        public void LoginTest()
+        {
+            UserManager manager = new UserManager();
+
+            manager.Register("Ivan");
+
+            bool result = manager.Login("Ivan");
+
+            Assert.IsTrue(result);
+        }
+
+        [TestMethod]
+        public void UnknownUserTest()
+        {
+            UserManager manager = new UserManager();
+
+            bool result = manager.Login("Petr");
+
+            Assert.IsFalse(result);
+        }
+    }
+}
+```
+
+### Что написать для задания 3
+
+В отчёте:
+
+> **1 итерация.** Первый участник написал тест регистрации пользователя. Тест не проходил, так как метод регистрации ещё не был реализован.
+>
+> **2 итерация.** Второй участник написал метод `Register()`. Тест регистрации успешно прошёл.
+>
+> **3 итерация.** Первый участник написал тест повторной регистрации. Тест проверял, что один и тот же пользователь не может быть зарегистрирован дважды.
+>
+> **4 итерация.** Второй участник изменил метод `Register()`, добавив проверку существования пользователя. Тест успешно прошёл.
+>
+> **5 итерация.** Участники поменялись ролями. Был создан тест авторизации пользователя.
+>
+> **6 итерация.** Второй участник реализовал метод `Login()`. Тест авторизации успешно прошёл.
+>
+> **7 итерация.** Был создан тест авторизации несуществующего пользователя. После реализации проверки тест успешно прошёл.
+
+Это соответствует описанию задания 5.3: один участник создаёт тест, который сначала не проходит, второй пишет код для его прохождения, после чего роли меняются. 
+
+**Важно:** это именно упрощённый учебный вариант. В методичке для приложения также указаны импорт и экспорт данных; если преподаватель требует **строго все пункты задания**, их тоже нужно добавить. 
