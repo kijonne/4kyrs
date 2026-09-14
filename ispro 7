@@ -1,0 +1,519 @@
+Да. Вот **прямо по файлам**, что создавать и что куда вставлять. Это по заданиям 5.1–5.4 из твоей ЛР №7. 
+
+# 1. Создай Console App
+
+Название проекта:
+
+```text
+Lab7
+```
+
+В проекте будут:
+
+```text
+Lab7
+│
+├── Program.cs
+├── Task51.cs
+├── Task52.cs
+├── Task53.cs
+├── Task54.cs
+└── Report.txt
+```
+
+Файлы `log.txt`, `timings.log`, `trace.log`, `storage.log` **создадутся сами после запуска**.
+
+---
+
+# 2. `Program.cs`
+
+Замени всё содержимое на:
+
+```csharp
+using System;
+
+class Program
+{
+    static void Main()
+    {
+        while (true)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Лабораторная работа №7");
+            Console.WriteLine("1 - Логирование исключений");
+            Console.WriteLine("2 - Stopwatch");
+            Console.WriteLine("3 - TraceSource");
+            Console.WriteLine("4 - SourceSwitch");
+            Console.WriteLine("0 - Выход");
+            Console.Write("Выбор: ");
+
+            string choice = Console.ReadLine();
+
+            switch (choice)
+            {
+                case "1":
+                    Task51.Run();
+                    break;
+
+                case "2":
+                    Task52.Run();
+                    break;
+
+                case "3":
+                    Task53.Run();
+                    break;
+
+                case "4":
+                    Task54.Run();
+                    break;
+
+                case "0":
+                    return;
+
+                default:
+                    Console.WriteLine("Неверный пункт.");
+                    break;
+            }
+        }
+    }
+}
+```
+
+---
+
+# 3. Создай `Task51.cs`
+
+ПКМ по проекту → **Добавить → Класс** → `Task51.cs`
+
+```csharp
+using System;
+using System.IO;
+
+static class Task51
+{
+    public static void Run()
+    {
+        try
+        {
+            Console.Write("Введите первое целое число: ");
+            int a = int.Parse(Console.ReadLine());
+
+            Console.Write("Введите второе целое число: ");
+            int b = int.Parse(Console.ReadLine());
+
+            Console.WriteLine("Сложение: " + (a + b));
+            Console.WriteLine("Вычитание: " + (a - b));
+            Console.WriteLine("Умножение: " + (a * b));
+            Console.WriteLine("Деление: " + (a / b));
+        }
+        catch (FormatException ex)
+        {
+            LogError(ex);
+        }
+        catch (OverflowException ex)
+        {
+            LogError(ex);
+        }
+        catch (DivideByZeroException ex)
+        {
+            LogError(ex);
+        }
+        catch (Exception ex)
+        {
+            LogError(ex);
+        }
+    }
+
+    static void LogError(Exception ex)
+    {
+        Console.WriteLine("Ошибка: " + ex.Message);
+
+        string text =
+            $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] " +
+            $"{ex.GetType().Name}: {ex.Message}\n" +
+            $"{ex}\n";
+
+        File.AppendAllText("log.txt", text);
+
+        Console.WriteLine("Ошибка записана в log.txt");
+    }
+}
+```
+
+Это **5.1**: разные `catch`, сообщение об ошибке и запись в `log.txt`. 
+
+---
+
+# 4. Создай `Task52.cs`
+
+```csharp
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+
+static class Task52
+{
+    public static void Run()
+    {
+        long totalTime = 0;
+
+        for (int operation = 1; operation <= 3; operation++)
+        {
+            long operationTime = 0;
+
+            for (int i = 1; i <= 3; i++)
+            {
+                Stopwatch stopwatch = Stopwatch.StartNew();
+
+                if (operation == 1)
+                {
+                    File.WriteAllText(
+                        "test.txt",
+                        new string('A', 10000));
+
+                    string text = File.ReadAllText("test.txt");
+                }
+                else if (operation == 2)
+                {
+                    double result = 0;
+
+                    for (int j = 0; j < 500000; j++)
+                    {
+                        result += Math.Sqrt(j);
+                    }
+                }
+                else
+                {
+                    Thread.Sleep(50);
+                }
+
+                stopwatch.Stop();
+
+                long ms = stopwatch.ElapsedMilliseconds;
+
+                operationTime += ms;
+                totalTime += ms;
+
+                string name;
+
+                if (operation == 1)
+                    name = "ReadTxtFile";
+                else if (operation == 2)
+                    name = "MathCalculation";
+                else
+                    name = "DelayOperation";
+
+                string log =
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] " +
+                    $"Operation={name}, Run={i}, Elapsed={ms} ms\n";
+
+                Debug.WriteLine(log);
+                File.AppendAllText("timings.log", log);
+            }
+
+            long average = operationTime / 3;
+
+            Console.WriteLine(
+                $"Операция {operation}: среднее время = {average} мс");
+
+            File.AppendAllText(
+                "timings.log",
+                $"Среднее время операции {operation}: {average} мс\n");
+        }
+
+        Console.WriteLine(
+            $"Общее время выполнения: {totalTime} мс");
+    }
+}
+```
+
+Это **5.2** — каждая операция выполняется 3 раза, считается среднее время и всё пишется в `timings.log`. 
+
+---
+
+# 5. Создай `Task53.cs`
+
+```csharp
+using System;
+using System.Diagnostics;
+
+static class Task53
+{
+    public static void Run()
+    {
+        var ts = new TraceSource("Calculator")
+        {
+            Switch = new SourceSwitch("CalculatorSwitch")
+            {
+                Level = SourceLevels.Information
+            }
+        };
+
+        ts.Listeners.Clear();
+
+        ts.Listeners.Add(
+            new TextWriterTraceListener("trace.log"));
+
+        ts.Listeners.Add(
+            new ConsoleTraceListener());
+
+        ts.AutoFlush = true;
+
+        try
+        {
+            Console.Write("Введите первое число: ");
+            int a = int.Parse(Console.ReadLine());
+
+            Console.Write("Введите второе число: ");
+            int b = int.Parse(Console.ReadLine());
+
+            ts.TraceEvent(
+                TraceEventType.Verbose,
+                0,
+                $"Входные данные: {a}, {b}");
+
+            ts.TraceInformation(
+                $"Начало операций: {a}, {b}");
+
+            int sum = a + b;
+            Console.WriteLine("Сложение: " + sum);
+
+            ts.TraceInformation(
+                $"Результат сложения: {sum}");
+
+            int sub = a - b;
+            Console.WriteLine("Вычитание: " + sub);
+
+            ts.TraceInformation(
+                $"Результат вычитания: {sub}");
+
+            int mul = a * b;
+            Console.WriteLine("Умножение: " + mul);
+
+            ts.TraceInformation(
+                $"Результат умножения: {mul}");
+
+            if (b == 0)
+                throw new DivideByZeroException(
+                    "Деление на ноль.");
+
+            int div = a / b;
+
+            Console.WriteLine("Деление: " + div);
+
+            ts.TraceInformation(
+                $"Результат деления: {div}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Ошибка: " + ex.Message);
+
+            ts.TraceEvent(
+                TraceEventType.Error,
+                1,
+                ex.ToString());
+        }
+        finally
+        {
+            ts.Flush();
+            ts.Close();
+        }
+
+        Console.WriteLine("Лог записан в trace.log");
+    }
+}
+```
+
+Здесь есть `TraceSource`, `TextWriterTraceListener`, `ConsoleTraceListener`, уровни `Verbose`, `Information`, `Error`. Именно это требуется в 5.3. 
+
+**Важно:** сейчас стоит:
+
+```csharp
+Level = SourceLevels.Information
+```
+
+Поэтому `Verbose` в лог не попадёт — это специально предусмотрено заданием. Чтобы проверить `Verbose`, поменяй на:
+
+```csharp
+Level = SourceLevels.Verbose
+```
+
+
+
+---
+
+# 6. Создай `Task54.cs`
+
+```csharp
+using System;
+using System.Diagnostics;
+
+static class Task54
+{
+    public static void Run()
+    {
+        var sourceSwitch = new SourceSwitch("StorageSwitch")
+        {
+            Level = SourceLevels.Warning
+        };
+
+        var ts = new TraceSource("Storage")
+        {
+            Switch = sourceSwitch
+        };
+
+        ts.Listeners.Clear();
+
+        ts.Listeners.Add(
+            new TextWriterTraceListener("storage.log"));
+
+        ts.AutoFlush = true;
+
+        try
+        {
+            ts.TraceEvent(
+                TraceEventType.Verbose,
+                0,
+                "Входные данные: id=1");
+
+            ts.TraceInformation(
+                "Начало загрузки данных.");
+
+            ts.TraceInformation(
+                "Загрузка данных завершена.");
+
+            ts.TraceEvent(
+                TraceEventType.Warning,
+                1,
+                "Попытка удалить несуществующую запись.");
+
+            try
+            {
+                throw new Exception(
+                    "Ошибка при сохранении данных.");
+            }
+            catch (Exception ex)
+            {
+                ts.TraceEvent(
+                    TraceEventType.Error,
+                    2,
+                    ex.ToString());
+
+                Console.WriteLine(
+                    "Ошибка: " + ex.Message);
+            }
+        }
+        finally
+        {
+            ts.Flush();
+            ts.Close();
+        }
+
+        Console.WriteLine(
+            "Лог записан в storage.log.");
+
+        Console.WriteLine(
+            "Сейчас уровень: Warning.");
+    }
+}
+```
+
+Это **5.4**.
+
+Сейчас:
+
+```csharp
+Level = SourceLevels.Warning
+```
+
+Поэтому попадут:
+
+```text
+Warning
+Error
+```
+
+Чтобы проверить все сообщения:
+
+```csharp
+Level = SourceLevels.Verbose
+```
+
+А чтобы полностью выключить логирование:
+
+```csharp
+Level = SourceLevels.Off
+```
+
+Именно эти проверки указаны в методичке. 
+
+---
+
+# 7. `Report.txt`
+
+Создай обычный текстовый файл `Report.txt` и можешь вставить туда ответы:
+
+```text
+ЛАБОРАТОРНАЯ РАБОТА №7
+Отладка проекта
+
+Цель работы:
+Изучить процесс отладки приложений и применение логирования проектов на C#.
+
+Контрольные вопросы
+
+8.1 Как правильно организовать обработку исключений при вводе пользовательских данных и записывать информацию об ошибках в лог-файл?
+
+Нужно использовать блок try-catch. Для разных типов ошибок используются отдельные блоки catch. При возникновении ошибки выводится сообщение пользователю, а информация об исключении записывается в лог-файл.
+
+8.2 Какие методы класса Stopwatch следует использовать для измерения времени выполнения операций?
+
+Используются методы Start(), Stop(), Restart(), а также свойство Elapsed или ElapsedMilliseconds. Удобно использовать Stopwatch.StartNew().
+
+8.3 Как настроить Trace.Listeners для записи отладочной информации в файл и какие данные следует включать в логи?
+
+Нужно создать TraceSource и добавить TextWriterTraceListener для записи в файл. Также можно добавить ConsoleTraceListener для вывода сообщений в консоль. В логах следует сохранять информацию об операциях, входных данных, результатах, предупреждениях и ошибках.
+
+8.4 Какие уровни детализации предоставляет TraceSwitch и как его использовать?
+
+Основные уровни: All, Verbose, Information, Warning, Error, Critical и Off. Уровень задаётся через SourceSwitch.Level. Это позволяет управлять количеством сообщений в логе.
+
+8.5 В чем преимущества использования Trace.WriteLine по сравнению с простой записью в файл?
+
+Trace позволяет использовать разные слушатели, например файл и консоль, а также управлять уровнями сообщений. Поэтому Trace удобнее для отладки и управления логированием.
+
+Вывод:
+
+В ходе лабораторной работы были изучены обработка исключений, запись ошибок в лог-файл, измерение времени выполнения операций с помощью Stopwatch, а также использование TraceSource, TraceListener и SourceSwitch.
+```
+
+Ответы соответствуют контрольным вопросам из файла. 
+
+---
+
+## В итоге папка выглядит так
+
+```text
+Lab7
+│
+├── Lab7.csproj
+├── Program.cs
+├── Task51.cs
+├── Task52.cs
+├── Task53.cs
+├── Task54.cs
+└── Report.txt
+```
+
+После запуска появятся:
+
+```text
+log.txt
+timings.log
+trace.log
+storage.log
+test.txt
+```
+
+**Для демонстрации преподу:** запускаешь → выбираешь `1`, проверяешь ошибку текстом/делением на ноль → `2` → `3` → `4`. Всё, основные пункты ЛР закрыты.
