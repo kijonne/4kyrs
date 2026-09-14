@@ -1,0 +1,182 @@
+Конечно. Ниже представлен готовый код на C#, который выполняет все пункты задания из раздела 5.2.
+
+Я разбил программу на логические блоки: симуляция трех различных операций, замер времени с помощью Stopwatch, логирование в консоль и файл, а также подсчет среднего времени.
+
+Код программы (Program.cs)
+
+```csharp
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+
+namespace PerformanceLoggingApp
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // Путь к файлу лога
+            string logFilePath = "timings.log";
+            
+            // Очищаем файл перед новым запуском (опционально, чтобы не путаться в старых логах)
+            if (File.Exists(logFilePath)) File.Delete(logFilePath);
+
+            Console.WriteLine("Запуск программы замера производительности...\n");
+
+            // Массивы для хранения времени выполнения (по 3 замера на каждую операцию)
+            double[] readFileTimes = new double[3];
+            double[] apiTimes = new double[3];
+            double[] mathTimes = new double[3];
+
+            // Переменная для общего времени
+            double totalElapsedTime = 0;
+
+            // --- 1. Операция чтения файла ---
+            for (int i = 0; i < 3; i++)
+            {
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+
+                ReadDataFromFile(); // Длительная операция
+
+                stopWatch.Stop();
+                double elapsedMs = stopWatch.Elapsed.TotalMilliseconds;
+                readFileTimes[i] = elapsedMs;
+                totalElapsedTime += elapsedMs;
+
+                LogResult("ReadTxtFile", elapsedMs, logFilePath);
+            }
+
+            // --- 2. Операция получения данных по API (симуляция) ---
+            for (int i = 0; i < 3; i++)
+            {
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+
+                FetchDataFromApi(); // Длительная операция
+
+                stopWatch.Stop();
+                double elapsedMs = stopWatch.Elapsed.TotalMilliseconds;
+                apiTimes[i] = elapsedMs;
+                totalElapsedTime += elapsedMs;
+
+                LogResult("FetchApiData", elapsedMs, logFilePath);
+            }
+
+            // --- 3. Операция сложных математических расчетов ---
+            for (int i = 0; i < 3; i++)
+            {
+                Stopwatch stopWatch = new Stopwatch();
+                stopWatch.Start();
+
+                PerformComplexMath(); // Длительная операция
+
+                stopWatch.Stop();
+                double elapsedMs = stopWatch.Elapsed.TotalMilliseconds;
+                mathTimes[i] = elapsedMs;
+                totalElapsedTime += elapsedMs;
+
+                LogResult("ComplexMathCalc", elapsedMs, logFilePath);
+            }
+
+            // --- 4. Вывод общего времени и средних значений ---
+            Console.WriteLine("\n--- Итоги ---");
+            Console.WriteLine($"Общее время выполнения всех операций: {totalElapsedTime:F2} ms");
+            
+            Console.WriteLine($"\nСреднее время чтения файла: {CalculateAverage(readFileTimes):F2} ms");
+            Console.WriteLine($"Среднее время API запроса: {CalculateAverage(apiTimes):F2} ms");
+            Console.WriteLine($"Среднее время мат. расчетов: {CalculateAverage(mathTimes):F2} ms");
+
+            Console.WriteLine("\nЛог сохранен в файл: " + Path.GetFullPath(logFilePath));
+            Console.ReadKey();
+        }
+
+        // --- Методы-симуляторы длительных операций ---
+
+        static void ReadDataFromFile()
+        {
+            // Симуляция чтения файла (задержка 150 мс)
+            Thread.Sleep(150); 
+        }
+
+        static void FetchDataFromApi()
+        {
+            // Симуляция API запроса (задержка 300 мс - самый долгий)
+            Thread.Sleep(300);
+        }
+
+        static void PerformComplexMath()
+        {
+            // Симуляция математических расчетов (задержка 50 мс - самый быстрый)
+            Thread.Sleep(50); 
+        }
+
+        // --- Вспомогательные методы ---
+
+        static void LogResult(string operationName, double elapsedMs, string filePath)
+        {
+            // Формат времени: [2026-09-10 14:23:11]
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            string logMessage = $"[{timestamp}] Operation={operationName}, Elapsed={elapsedMs:F0} ms";
+
+            // Вывод в консоль отладки
+            Debug.WriteLine(logMessage);
+
+            // Запись в файл
+            File.AppendAllText(filePath, logMessage + Environment.NewLine);
+            
+            // Дублируем в консоль для наглядности
+            Console.WriteLine(logMessage);
+        }
+
+        static double CalculateAverage(double[] times)
+        {
+            double sum = 0;
+            foreach (var t in times) sum += t;
+            return sum / times.Length;
+        }
+    }
+}
+```
+
+Как это работает (разбор по пунктам задания):
+
+1. Создание длительных операций:
+   · Реализованы три метода: ReadDataFromFile (чтение файла), FetchDataFromApi (имитация запроса к API) и PerformComplexMath (сложные расчеты).
+   · Внутри них используется Thread.Sleep(), чтобы имитировать задержку. В реальной программе здесь был бы код чтения/записи.
+2. Замер времени:
+   · Для каждой операции создается объект Stopwatch.
+   · Перед началом операции вызывается stopWatch.Start(), после — stopWatch.Stop().
+   · Каждая операция выполняется 3 раза (цикл for (int i = 0; i < 3; i++)).
+   · Вычисляется среднее арифметическое время для каждой операции.
+3. Логирование:
+   · Debug.WriteLine пишет в окно "Вывод" (Output) в Visual Studio.
+   · File.AppendAllText дописывает строку в файл timings.log. Формат соблюден строго по образцу: [2026-09-10 14:23:11] Operation=ReadTxtFile, Elapsed=123 ms.
+4. Общее время:
+   · Переменная totalElapsedTime аккумулирует в себе миллисекунды всех 9 замеров и выводится в конце.
+5. Анализ:
+   · Поскольку в коде заданы разные задержки (150, 300, 50 мс), программа наглядно покажет, что операция FetchApiData самая долгая, а ComplexMathCalc — самая быстрая.
+
+Пример вывода в консоль:
+
+```text
+Запуск программы замера производительности...
+
+[2024-05-20 10:00:00] Operation=ReadTxtFile, Elapsed=152 ms
+[2024-05-20 10:00:00] Operation=ReadTxtFile, Elapsed=151 ms
+[2024-05-20 10:00:00] Operation=ReadTxtFile, Elapsed=153 ms
+[2024-05-20 10:00:01] Operation=FetchApiData, Elapsed=301 ms
+...
+
+--- Итоги ---
+Общее время выполнения всех операций: 1512.45 ms
+
+Среднее время чтения файла: 152.00 ms
+Среднее время API запроса: 301.00 ms
+Среднее время мат. расчетов: 51.00 ms
+```
+
+Выводы (для пункта 5):
+
+Операция API запроса выполняется дольше всех, так как включает в себя сетевое взаимодействие и ожидание ответа от удаленного сервера (симулировано задержкой 300 мс). Операция математических расчетов самая быстрая, так как выполняется локально на процессоре и не требует ввода-вывода (I/O).
