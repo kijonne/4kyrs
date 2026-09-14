@@ -1,0 +1,410 @@
+Да. Сделаем **максимально просто**: два проекта в одном решении — консольный для **5.1–5.4** и Web API для **5.5**.
+
+## 1. Создай решение
+
+В Visual Studio:
+
+**Создать проект → Пустое решение**
+
+Назови:
+
+```text
+Lab6
+```
+
+---
+
+# Проект №1 — Console
+
+Добавь проект:
+
+**Добавить → Новый проект → Console App → C#**
+
+Название:
+
+```text
+Lab6.Console
+```
+
+В нём будут такие файлы:
+
+```text
+Lab6.Console
+│
+├── Program.cs
+├── NegativeNumberException.cs
+├── ExceptionTask.cs
+├── FileTask.cs
+├── GlobalException.cs
+└── numbers.txt
+```
+
+---
+
+## 2. `NegativeNumberException.cs`
+
+Создай **класс** с таким названием и вставь:
+
+```csharp
+using System;
+
+public class NegativeNumberException : Exception
+{
+    public NegativeNumberException(string message)
+        : base(message)
+    {
+    }
+}
+```
+
+Это **5.2**.
+
+---
+
+## 3. `ExceptionTask.cs`
+
+```csharp
+using System;
+using System.IO;
+
+public class ExceptionTask
+{
+    public static void Run()
+    {
+        try
+        {
+            Console.Write("Введите первое число: ");
+            int a = int.Parse(Console.ReadLine());
+
+            Console.Write("Введите второе число: ");
+            int b = int.Parse(Console.ReadLine());
+
+            Console.WriteLine("Результат: " + (a / b));
+        }
+        catch (FormatException)
+        {
+            Console.WriteLine("Ошибка: нужно ввести число.");
+            File.AppendAllText("errors.log", "FormatException\n");
+        }
+        catch (DivideByZeroException)
+        {
+            Console.WriteLine("Ошибка: деление на ноль.");
+            File.AppendAllText("errors.log", "DivideByZeroException\n");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Произошла ошибка.");
+            Console.WriteLine(ex.StackTrace);
+            File.AppendAllText("errors.log", ex.ToString() + "\n");
+        }
+    }
+}
+```
+
+Это **5.1**.
+
+---
+
+# 4. `FileTask.cs`
+
+```csharp
+using System;
+using System.IO;
+
+public class FileTask
+{
+    public static void Run()
+    {
+        try
+        {
+            using (StreamReader file = new StreamReader("numbers.txt"))
+            {
+                string line;
+
+                while ((line = file.ReadLine()) != null)
+                {
+                    int number = int.Parse(line);
+
+                    if (number % 2 == 0)
+                        Console.WriteLine("Чётное число: " + number);
+                }
+            }
+
+            Console.WriteLine("Файл закрыт.");
+        }
+        catch (FileNotFoundException)
+        {
+            Console.WriteLine("Ошибка: файл не найден.");
+        }
+    }
+}
+```
+
+Это **5.3**.
+
+---
+
+## 5. Создай `numbers.txt`
+
+В этом же проекте создай текстовый файл:
+
+```text
+numbers.txt
+```
+
+Внутри напиши:
+
+```text
+1
+2
+3
+4
+5
+6
+7
+8
+```
+
+При запуске программа должна вывести:
+
+```text
+Чётное число: 2
+Чётное число: 4
+Чётное число: 6
+Чётное число: 8
+Файл закрыт.
+```
+
+---
+
+# 6. `GlobalException.cs`
+
+```csharp
+using System;
+using System.IO;
+
+public class GlobalException
+{
+    public static void Setup()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+        {
+            File.AppendAllText(
+                "crash.log",
+                DateTime.Now + "\n" +
+                e.ExceptionObject + "\n"
+            );
+
+            Console.WriteLine("Произошла критическая ошибка.");
+            Console.WriteLine("Информация записана в crash.log");
+        };
+    }
+}
+```
+
+Это **5.4**.
+
+---
+
+# 7. `Program.cs`
+
+А вот тут мы всё собираем:
+
+```csharp
+using System;
+
+class Program
+{
+    static void Main()
+    {
+        GlobalException.Setup();
+
+        Console.WriteLine("=== 5.1 Обработка исключений ===");
+        ExceptionTask.Run();
+
+        Console.WriteLine();
+        Console.WriteLine("=== 5.2 Пользовательское исключение ===");
+
+        try
+        {
+            Console.Write("Введите число: ");
+            int number = int.Parse(Console.ReadLine());
+
+            if (number < 0)
+                throw new NegativeNumberException(
+                    "Число не может быть отрицательным."
+                );
+
+            Console.WriteLine("Число: " + number);
+        }
+        catch (NegativeNumberException ex)
+        {
+            Console.WriteLine("Ошибка: " + ex.Message);
+        }
+        catch (FormatException)
+        {
+            Console.WriteLine("Введите именно число.");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("=== 5.3 Работа с файлом ===");
+        FileTask.Run();
+
+        Console.WriteLine();
+        Console.WriteLine("Готово!");
+    }
+}
+```
+
+Теперь **5.1–5.4 работают из одного `Program.cs`**.
+
+---
+
+# 8. Проект №2 — REST API
+
+Теперь в том же решении:
+
+**ПКМ по `Lab6` → Добавить → Новый проект → ASP.NET Core Web API**
+
+Название:
+
+```text
+Lab6.Api
+```
+
+Если Visual Studio спрашивает настройки, можно оставить стандартные.
+
+В итоге:
+
+```text
+Lab6
+│
+├── Lab6.Console
+│   ├── Program.cs
+│   ├── NegativeNumberException.cs
+│   ├── ExceptionTask.cs
+│   ├── FileTask.cs
+│   ├── GlobalException.cs
+│   └── numbers.txt
+│
+└── Lab6.Api
+    └── Program.cs
+```
+
+---
+
+# 9. `Lab6.Api → Program.cs`
+
+**Полностью удали старый код** и вставь:
+
+```csharp
+using System;
+
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/user", (string? id) =>
+{
+    try
+    {
+        if (id == null || !int.TryParse(id, out int userId))
+        {
+            return Results.Json(
+                new
+                {
+                    error = "Invalid ID format",
+                    statusCode = 400
+                },
+                statusCode: 400
+            );
+        }
+
+        if (userId != 123)
+        {
+            return Results.Json(
+                new
+                {
+                    error = "User not found",
+                    statusCode = 404
+                },
+                statusCode: 404
+            );
+        }
+
+        return Results.Ok(new
+        {
+            id = 123,
+            name = "Ivan"
+        });
+    }
+    catch (Exception ex)
+    {
+        File.AppendAllText("errors.log", ex + "\n");
+
+        return Results.Json(
+            new
+            {
+                error = "Internal server error",
+                statusCode = 500
+            },
+            statusCode: 500
+        );
+    }
+});
+
+app.Run();
+```
+
+Это **5.5**.
+
+---
+
+## Как проверить API
+
+Запускаешь `Lab6.Api`.
+
+В браузере открываешь примерно:
+
+```text
+http://localhost:xxxx/user?id=123
+```
+
+Получишь:
+
+```json
+{
+  "id": 123,
+  "name": "Ivan"
+}
+```
+
+А:
+
+```text
+/user?id=999
+```
+
+даст:
+
+```json
+{
+  "error": "User not found",
+  "statusCode": 404
+}
+```
+
+---
+
+### В итоге для сдачи
+
+Тебе достаточно показать:
+
+| Задание | Где находится                               |
+| ------- | ------------------------------------------- |
+| **5.1** | `ExceptionTask.cs`                          |
+| **5.2** | `NegativeNumberException.cs` + `Program.cs` |
+| **5.3** | `FileTask.cs` + `numbers.txt`               |
+| **5.4** | `GlobalException.cs`                        |
+| **5.5** | `Lab6.Api/Program.cs`                       |
+
+**Не надо делать отдельный проект для каждого задания.** Так будет аккуратно и при этом не заебисто.
