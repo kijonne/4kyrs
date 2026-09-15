@@ -1,0 +1,267 @@
+Привет! Я изучил твой код и задания к лабораторной работе. Задания направлены на рефакторинг — улучшение читаемости, структуры и надежности кода без изменения его функциональности.
+
+Ниже я приведу пошаговое решение всех пунктов задания, а в конце дам подробную инструкцию, как подключить SQLite в твоем проекте, чтобы всё заработало.
+
+---
+
+Часть 1: Выполнение заданий по рефакторингу (пункты 5.1 – 5.8)
+
+Для удобства я буду показывать измененные фрагменты кода. Рекомендую разнести классы по отдельным файлам (как указано в комментарии в самом верху твоего скриншота).
+
+5.1 Переименование переменной
+
+В классе OrderService переменная t отвечает за НДС. Переименуем её в vatRate (ставка НДС).
+
+5.2 Замена магического числа
+
+В CalculateFinalPrice есть число 10000 (порог скидки) и 0.1 (размер скидки). Создадим для них константы.
+
+5.3 Упрощение условного выражения
+
+Заменим if-else для расчета скидки на тернарный оператор.
+
+Измененный класс OrderService (с учетом 5.1, 5.2, 5.3):
+
+```csharp
+public class OrderService
+{
+    private readonly AppDbContext _dbContext;
+
+    // 5.2 Замена магических чисел на константы
+    private const double VatRate = 0.2; // 5.1 Переименовали t в VatRate
+    private const double DiscountThreshold = 10000;
+    private const double DiscountRate = 0.1;
+
+    public OrderService(AppDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    public void AddOrder(Order order)
+    {
+        _dbContext.Orders.Add(order);
+        _dbContext.SaveChanges();
+    }
+
+    public double CalculateFinalPrice(Order order)
+    {
+        // 5.3 Упрощение условного выражения с помощью тернарного оператора
+        double discount = order.Total > DiscountThreshold ? order.Total * DiscountRate : 0;
+        
+        // Итоговая цена
+        return order.Total - discount + (order.Total * VatRate);
+    }
+    
+    // ... остальные методы ...
+}
+```
+
+5.4 Инкапсуляция поля
+
+В классе Customer поле Name сейчас публичное. Сделаем его приватным (_name) и создадим свойство Name с проверкой на пустую строку или null.
+
+Измененный класс Customer:
+
+```csharp
+public class Customer
+{
+    public int Id { get; set; }
+    
+    // 5.4 Инкапсуляция поля Name
+    private string _name;
+    public string Name 
+    { 
+        get => _name; 
+        set 
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                throw new ArgumentException("Имя не может быть пустым или null.");
+            _name = value;
+        } 
+    }
+    
+    public string Email { get; set; }
+    public List<Order> Orders { get; set; }
+}
+```
+
+5.5 Перемещение метода
+
+Нужно перенести вывод информации о клиенте из OrderService в класс Customer. Создадим метод PrintInfo() в Customer.
+
+Изменения в Customer:
+
+```csharp
+// Внутри класса Customer
+public void PrintInfo()
+{
+    Console.WriteLine("Customer: " + this.Name);
+    Console.WriteLine("Email: " + this.Email);
+}
+```
+
+Изменения в OrderService (метод PrintOrderDetails):
+Вместо Console.WriteLine("Customer Email: " + order.Customer.Email); теперь будем вызывать order.Customer.PrintInfo(); (или только email, но задание просит перенести логику о клиенте в класс клиента).
+
+5.6 Извлечение метода
+
+Метод PrintOrderDetails делает слишком много. Разделим его на отдельные методы.
+
+```csharp
+public void PrintOrderDetails(int orderId)
+{
+    var order = _dbContext.Orders.Include(o => o.Customer).FirstOrDefault(o => o.Id == orderId);
+    if (order == null) return; // Защита от null
+
+    PrintOrderBaseInfo(order);
+    PrintOrderShippingInfo(order);
+    order.Customer.PrintInfo(); // Используем метод из п. 5.5
+}
+
+private void PrintOrderBaseInfo(Order order)
+{
+    Console.WriteLine("Order Id: " + order.Id);
+    Console.WriteLine("Total: " + order.Total);
+}
+
+private void PrintOrderShippingInfo(Order order)
+{
+    Console.WriteLine("Express Shipping: " + (order.IsExpress ? "Yes" : "No"));
+}
+```
+
+5.7 Замена вложенных условий на guard clauses
+
+В CustomerService.PrintCustomerInfo заменим проверку на null в стиле "guard clause" (защитное условие — если плохо, выходим сразу).
+
+Изменения в CustomerService:
+
+```csharp
+public void PrintCustomerInfo(int customerId)
+{
+    var customer = _dbContext.Customers.Include(c => c.Orders).FirstOrDefault(c => c.Id == customerId);
+    
+    // 5.7 Guard clause
+    if (customer == null)
+    {
+        Console.WriteLine("Клиент не найден.");
+        return;
+    }
+
+    // Логика вывода (можно тоже вынести в метод Customer.PrintInfo())
+    Console.WriteLine("Customer: " + customer.Name);
+    Console.WriteLine("Email: " + customer.Email);
+}
+```
+
+5.8 Замена длинного метода (Выделение класса)
+
+Метод CalculateFinalPrice содержит логику расчета. Задание просит выделить для этого отдельный класс-калькулятор.
+
+Создаем новый класс PriceCalculator:
+
+```csharp
+public class PriceCalculator
+{
+    private const double VatRate = 0.2;
+    private const double DiscountThreshold = 10000;
+    private const double DiscountRate = 0.1;
+
+    public double CalculateFinalPrice(Order order)
+    {
+        double discount = order.Total > DiscountThreshold ? order.Total * DiscountRate : 0;
+        return order.Total - discount + (order.Total * VatRate);
+    }
+}
+```
+
+Изменяем OrderService:
+
+```csharp
+public class OrderService
+{
+    private readonly AppDbContext _dbContext;
+    private readonly PriceCalculator _calculator;
+
+    public OrderService(AppDbContext dbContext)
+    {
+        _dbContext = dbContext;
+        _calculator = new PriceCalculator(); // Инициализируем калькулятор
+    }
+
+    // ... AddOrder и PrintOrderDetails ...
+
+    public double CalculateFinalPrice(Order order)
+    {
+        // Делегируем расчет калькулятору
+        return _calculator.CalculateFinalPrice(order); 
+    }
+}
+```
+
+---
+
+Часть 2: Подключение SQLite
+
+В твоем коде уже есть строка optionsBuilder.UseSqlite(...), но чтобы всё заработало, нужно установить NuGet-пакеты и правильно настроить контекст.
+
+Шаг 1. Установка NuGet-пакетов
+В Visual Studio:
+
+1. Нажми правой кнопкой мыши на проект в обозревателе решений -> Управление пакетами NuGet...
+2. Во вкладке "Обзор" найди и установи следующие пакеты:
+   · Microsoft.EntityFrameworkCore
+   · Microsoft.EntityFrameworkCore.Sqlite
+   · Microsoft.EntityFrameworkCore.Tools (нужен для миграций)
+
+Шаг 2. Настройка строки подключения
+В твоем коде строка optionsBuilder.UseSqlite("Data Source=OrderManagement.db"); выглядит правильно. Файл базы данных OrderManagement.db создастся автоматически в папке с исполняемым файлом (обычно bin/Debug/netX.X/).
+
+Шаг 3. Инициализация БД (если её нет)
+В твоем Main уже есть строка dbContext.Database.EnsureCreated();. Это самый простой способ для лабораторной работы — он создаст базу данных и таблицы, если их еще нет.
+
+Шаг 4. Исправление возможной ошибки с подключением
+Если при запуске возникнет ошибка, проверь, что строка подключения корректна. Иногда помогает указать полный путь, но для лабы достаточно имени файла.
+
+Важное замечание по коду из 4-го скриншота:
+В твоем коде Main есть строка:
+
+```csharp
+var order = new Order { Total = 1200, IsExpress = true, Customer = customer };
+orderService.AddOrder(order);
+```
+
+Обрати внимание: при создании заказа ты передаешь объект customer, но не указываешь CustomerId. Entity Framework должен сам подтянуть ID, так как объект customer уже отслеживается контекстом (после SaveChanges в AddCustomer у него появился Id). Это сработает корректно.
+
+Итоговый пример Main:
+
+```csharp
+static void Main(string[] args)
+{
+    // EnsureCreated создаст файл БД, если его нет
+    using var dbContext = new AppDbContext();
+    dbContext.Database.EnsureCreated();
+
+    var customerService = new CustomerService(dbContext);
+    var orderService = new OrderService(dbContext);
+
+    // Создание клиента
+    var customer = new Customer { Name = "Alice", Email = "alice@example.com" };
+    customerService.AddCustomer(customer);
+
+    // Создание заказа
+    var order = new Order { Total = 1200, IsExpress = true, Customer = customer };
+    orderService.AddOrder(order);
+
+    // Вывод информации (с учетом рефакторинга)
+    customerService.PrintCustomerInfo(customer.Id);
+    orderService.PrintOrderDetails(order.Id);
+
+    Console.WriteLine("Final Price: " + orderService.CalculateFinalPrice(order));
+}
+```
+
+Если база данных не создается:
+Убедись, что у тебя установлен пакет Microsoft.EntityFrameworkCore.Sqlite. Если ты используешь MySQL или MSSQL (как написано в п. 6.1 методички), замени UseSqlite на UseMySql или UseSqlServer и установи соответствующие пакеты (Pomelo.EntityFrameworkCore.MySql или Microsoft.EntityFrameworkCore.SqlServer). Но для начала проще всего запустить на SQLite, как в исходном коде.
+
+Совет: После рефакторинга разнеси классы Customer, Order, AppDbContext, CustomerService, OrderService и PriceCalculator по отдельным .cs файлам в проекте. Это сильно улучшит структуру и соответствует заданию "Разнести типы данных по разным файлам".
