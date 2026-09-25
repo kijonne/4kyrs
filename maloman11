@@ -1,0 +1,239 @@
+Понял, братан! Разбиваем на два файла: один — форма, второй — работа с базой. И убираем всё лишнее.
+
+---
+
+📁 Структура проекта
+
+```
+MailApp/
+├── Form1.cs         # Интерфейс и логика кнопок
+├── Database.cs      # Работа с базой данных (SQLite)
+```
+
+---
+
+📋 Шаг 1. Установи NuGet-пакет
+
+Tools → NuGet Package Manager → Manage NuGet Packages → найди System.Data.SQLite.Core → Install.
+
+---
+
+📄 Файл 1: Database.cs
+
+Создай новый файл в проекте: правой кнопкой на проекте → Add → Class → назови Database.cs.
+
+```csharp
+using System;
+using System.Data.SQLite;
+using System.IO;
+
+namespace MailApp
+{
+    public class Database
+    {
+        private string connectionString;
+
+        public Database(string dbPath)
+        {
+            connectionString = $"Data Source={dbPath};Version=3;";
+            if (!File.Exists(dbPath))
+                SQLiteConnection.CreateFile(dbPath);
+            CreateTables();
+        }
+
+        // 5.4.2 Создание таблиц
+        private void CreateTables()
+        {
+            using (var conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                new SQLiteCommand(
+                    "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, password TEXT, name TEXT)",
+                    conn).ExecuteNonQuery();
+
+                new SQLiteCommand(
+                    "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT, receiver TEXT, text TEXT, date TEXT, is_deleted INTEGER DEFAULT 0)",
+                    conn).ExecuteNonQuery();
+
+                // Тестовые данные
+                var check = new SQLiteCommand("SELECT COUNT(*) FROM users", conn);
+                if (Convert.ToInt64(check.ExecuteScalar()) == 0)
+                {
+                    new SQLiteCommand("INSERT INTO users (email, password, name) VALUES ('test@mail.com', '123', 'Тест')", conn).ExecuteNonQuery();
+                    new SQLiteCommand("INSERT INTO messages (sender, receiver, text, date) VALUES ('boss@mail.com', 'test@mail.com', 'Привет!', '2026-09-25')", conn).ExecuteNonQuery();
+                    new SQLiteCommand("INSERT INTO messages (sender, receiver, text, date) VALUES ('friend@mail.com', 'test@mail.com', 'Пойдем гулять?', '2026-09-25')", conn).ExecuteNonQuery();
+                }
+            }
+        }
+
+        // Авторизация
+        public bool Login(string email, string password)
+        {
+            using (var conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                var cmd = new SQLiteCommand("SELECT COUNT(*) FROM users WHERE email=@e AND password=@p", conn);
+                cmd.Parameters.AddWithValue("@e", email);
+                cmd.Parameters.AddWithValue("@p", password);
+                return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
+            }
+        }
+
+        // Получить сообщения (is_deleted = 0)
+        public SQLiteDataReader GetMessages()
+        {
+            var conn = new SQLiteConnection(connectionString);
+            conn.Open();
+            var cmd = new SQLiteCommand("SELECT id, sender, text FROM messages WHERE is_deleted=0", conn);
+            return cmd.ExecuteReader();
+        }
+
+        // Получить корзину (is_deleted = 1)
+        public SQLiteDataReader GetTrash()
+        {
+            var conn = new SQLiteConnection(connectionString);
+            conn.Open();
+            var cmd = new SQLiteCommand("SELECT id, sender, text FROM messages WHERE is_deleted=1", conn);
+            return cmd.ExecuteReader();
+        }
+
+        // Удалить сообщение (в корзину)
+        public void DeleteMessage(int id)
+        {
+            using (var conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                var cmd = new SQLiteCommand("UPDATE messages SET is_deleted=1 WHERE id=@id", conn);
+                cmd.Parameters.AddWithValue("@id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+    }
+}
+```
+
+---
+
+📄 Файл 2: Form1.cs
+
+```csharp
+using System;
+using System.Windows.Forms;
+
+namespace MailApp
+{
+    public partial class Form1 : Form
+    {
+        Database db = new Database("mail.db");
+
+        public Form1()
+        {
+            InitializeComponent();
+            // Скрываем панель сообщений до авторизации
+            lstMessages.Visible = false;
+            btnRefresh.Visible = false;
+            btnTrash.Visible = false;
+            btnSend.Visible = false;
+            btnFilter.Visible = false;
+        }
+
+        // Авторизация
+        private void btnLogin_Click(object sender, EventArgs e)
+        {
+            if (db.Login(txtEmail.Text, txtPassword.Text))
+            {
+                MessageBox.Show("Добро пожаловать!");
+                txtEmail.Visible = false;
+                txtPassword.Visible = false;
+                btnLogin.Visible = false;
+                lstMessages.Visible = true;
+                btnRefresh.Visible = true;
+                btnTrash.Visible = true;
+                btnSend.Visible = true;
+                btnFilter.Visible = true;
+                LoadMessages();
+            }
+            else
+            {
+                MessageBox.Show("Неверный email или пароль!");
+            }
+        }
+
+        // Загрузка сообщений
+        private void LoadMessages()
+        {
+            lstMessages.Items.Clear();
+            var reader = db.GetMessages();
+            while (reader.Read())
+                lstMessages.Items.Add($"[{reader["id"]}] {reader["sender"]}: {reader["text"]}");
+            reader.Close();
+        }
+
+        // Обновить
+        private void btnRefresh_Click(object sender, EventArgs e)
+        {
+            LoadMessages();
+        }
+
+        // Корзина
+        private void btnTrash_Click(object sender, EventArgs e)
+        {
+            lstMessages.Items.Clear();
+            var reader = db.GetTrash();
+            while (reader.Read())
+                lstMessages.Items.Add($"[{reader["id"]}] {reader["sender"]}: {reader["text"]}");
+            reader.Close();
+        }
+
+        // Удалить по двойному клику
+        private void lstMessages_DoubleClick(object sender, EventArgs e)
+        {
+            if (lstMessages.SelectedItem == null) return;
+            string s = lstMessages.SelectedItem.ToString();
+            int id = int.Parse(s.Substring(1, s.IndexOf(']') - 1));
+            db.DeleteMessage(id);
+            LoadMessages();
+        }
+
+        // Заглушки (5.7.1)
+        private void btnSend_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Заглушка: отправка сообщений");
+        }
+
+        private void btnFilter_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Заглушка: фильтрация");
+        }
+    }
+}
+```
+
+---
+
+📋 Шаг 3. Привяжи кнопки в дизайнере
+
+В дизайнере формы (двойной клик по Form1.cs):
+
+1. Двойной клик по btnLogin → создастся btnLogin_Click. Если VS создал другое имя — просто удали лишнее, оставь то, что в коде выше.
+2. То же для btnRefresh, btnTrash, btnSend, btnFilter.
+3. Для lstMessages: выдели на форме → справа Properties → иконка ⚡ (молния) → найди DoubleClick → двойной клик.
+
+---
+
+🚀 Запуск
+
+1. F5.
+2. Введи test@mail.com / 123.
+3. Двойной клик по сообщению → уйдёт в корзину.
+4. Кнопки «Отправить» и «Фильтровать» — заглушки.
+
+---
+
+📁 Где БД
+
+Файл mail.db появится в bin/Debug/net6.0/ рядом с exe-файлом.
+
+---
+
+Если что-то не работает — скажи, какая ошибка.
