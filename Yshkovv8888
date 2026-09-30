@@ -1,0 +1,541 @@
+Задания 4–10 с нуля (копипаст)
+
+Считаем, что задания 1–3 (подготовка ресурсов + 2048) у тебя уже сделаны. Идём с 4-го.
+
+Все команды — из корня ~/lw8.
+
+---
+
+Задание 4. Gitea + MySQL
+
+4.1. Папка и .env
+
+```bash
+cd ~/lw8
+mkdir -p 02-gitea-mysql
+cd 02-gitea-mysql
+nano .env
+```
+
+Вставь:
+
+```
+MYSQL_ROOT_PASSWORD=rootpass
+MYSQL_DATABASE=gitea
+MYSQL_USER=gitea
+MYSQL_PASSWORD=giteapass
+```
+
+Сохрани: Ctrl+O, Enter, Ctrl+X.
+
+4.2. docker-compose.yml
+
+```bash
+nano docker-compose.yml
+```
+
+```yaml
+services:
+  db:
+    image: mysql:8.0.39
+    container_name: lw8-gitea-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - gitea_db:/var/lib/mysql
+    networks:
+      - backend
+
+  gitea:
+    image: gitea/gitea:1.22.3
+    container_name: lw8-gitea
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      GITEA__database__DB_TYPE: mysql
+      GITEA__database__HOST: db:3306
+      GITEA__database__NAME: ${MYSQL_DATABASE}
+      GITEA__database__USER: ${MYSQL_USER}
+      GITEA__database__PASSWD: ${MYSQL_PASSWORD}
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    volumes:
+      - gitea_data:/data
+    networks:
+      - backend
+      - frontend
+
+volumes:
+  gitea_db:
+  gitea_data:
+
+networks:
+  backend:
+    internal: true
+  frontend:
+```
+
+4.3. Запуск
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+Открой http://localhost:3000. При первом запуске нажми «Install Gitea» — настройки БД уже подставятся из env.
+
+---
+
+Задание 5. Flame
+
+```bash
+cd ~/lw8
+mkdir -p 03-flame
+cd 03-flame
+nano docker-compose.yml
+```
+
+```yaml
+services:
+  flame:
+    image: pawelmalak/flame:2.7.0
+    container_name: lw8-flame
+    restart: unless-stopped
+    environment:
+      PASSWORD: changeme
+    volumes:
+      - flame_data:/app/data
+    ports:
+      - "5005:5005"
+    networks:
+      - webnet
+
+volumes:
+  flame_data:
+
+networks:
+  webnet:
+```
+
+```bash
+docker compose up -d
+```
+
+Открой http://localhost:5005. Пароль: changeme.
+
+---
+
+Задание 6. Filebrowser
+
+```bash
+cd ~/lw8
+mkdir -p 04-filebrowser
+cd 04-filebrowser
+nano docker-compose.yml
+```
+
+```yaml
+services:
+  filebrowser:
+    image: filebrowser/filebrowser:v2.31.2
+    container_name: lw8-filebrowser
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - fb_data:/srv
+      - fb_db:/database
+    networks:
+      - webnet
+
+volumes:
+  fb_data:
+  fb_db:
+
+networks:
+  webnet:
+```
+
+```bash
+docker compose up -d
+```
+
+Создай админа:
+
+```bash
+docker compose exec filebrowser /filebrowser config init
+docker compose exec filebrowser /filebrowser users add admin adminpass --perm.admin
+```
+
+Открой http://localhost:8081. Логин admin / adminpass.
+
+---
+
+Задание 7. phpMyAdmin + MySQL (связь + изоляция сети)
+
+```bash
+cd ~/lw8
+mkdir -p 05-phpmyadmin-mysql
+cd 05-phpmyadmin-mysql
+nano .env
+```
+
+```
+MYSQL_ROOT_PASSWORD=rootpass
+MYSQL_DATABASE=appdb
+MYSQL_USER=appuser
+MYSQL_PASSWORD=apppass
+```
+
+```bash
+nano docker-compose.yml
+```
+
+```yaml
+services:
+  db:
+    image: mysql:8.0.39
+    container_name: lw8-pma-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - pma_db:/var/lib/mysql
+    networks:
+      - dbnet
+
+  phpmyadmin:
+    image: phpmyadmin:5.2.1-apache
+    container_name: lw8-phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+    ports:
+      - "8082:80"
+    networks:
+      - dbnet
+      - frontend
+
+volumes:
+  pma_db:
+
+networks:
+  dbnet:
+    internal: true
+  frontend:
+```
+
+```bash
+docker compose up -d
+```
+
+Открой http://localhost:8082. Логин appuser / apppass, сервер db.
+
+Проверка изоляции:
+
+```bash
+docker network inspect 05-phpmyadmin-mysql_dbnet | grep Internal
+```
+
+Должно быть "Internal": true.
+
+---
+
+Задание 8. phpcdPgAdmin + PostgreSQL
+
+```bash
+cd  ~/lw8
+mkdir -p 06-ph07ppgadmin-postgres
+cd 06-ph-adminppgadmin-postgres
+nano .env
+er```
+
+```
+
+POSTGRES_DB=app
+db
+POSTGRES_USER=appuser
+POSTGRES_PASSWORD=apppass
+
+```
+
+```bash
+nano docker-compose.yml
+```
+
+```yaml
+services:
+  db:
+    image: postgres:16.3-alpine
+    container_name: lw8-ppga-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ppga_db:/var/lib/postgresql/data
+    networks:
+      - dbnet
+
+  phppgadmin:
+    image: dpage/phppgadmin:7.13
+    container_name: lw8-phppgadmin
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    ports:
+      - "8083:80"
+    networks:
+      - dbnet
+      - frontend
+
+volumes:
+  ppga_db:
+
+networks:
+  dbnet:
+    internal: true
+  frontend:
+```
+
+```bash
+docker compose up -d
+```
+
+Открой http://localhost:8083. Если к БД не коннектится — пропускай, в методичке разрешено.
+
+---
+
+Задание 9. Adminer + MySQL (связь + изоляция)
+
+```bash
+cd ~/lw8
+mkdir -p 07-adminer
+nano .env
+```
+
+```
+MYSQL_ROOT_PASSWORD=rootpass
+MYSQL_DATABASE=appdb
+MYSQL_USER=appuser
+MYSQL_PASSWORD=apppass
+```
+
+```bash
+nano docker-compose.yml
+```
+
+```yaml
+services:
+  db:
+    image: mysql:8.0.39
+    container_name: lw8-adminer-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - adminer_db:/var/lib/mysql
+    networks:
+      - dbnet
+
+  adminer:
+    image: adminer:4.8.1-standalone
+    container_name: lw8-adminer
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    ports:
+      - "8084:8080"
+    networks:
+      - dbnet
+      - frontend
+
+volumes:
+  adminer_db:
+
+networks:
+  dbnet:
+    internal: true
+  frontend:
+```
+
+```bash
+docker compose up -d
+```
+
+Открой http://localhost:8084. Сервер db, логин appuser, пароль apppass.
+
+---
+
+Задание 10. Adminer со скином
+
+```bash
+cd ~/lw8
+mkdir -p 08-adminer-skin/theme
+cd 08-adminer-skin
+cp ../07-adminer/.env .
+```
+
+Скачай скин (тема «dracula»):
+
+```bash
+curl -L -o theme/adminer.css https://raw.githubusercontent.com/vrana/adminer/master/designs/dracula/adminer.css
+```
+
+Если curl не работает — скачай adminer.css руками с https://github.com/vrana/adminer/tree/master/designs и положи в theme/.
+
+docker-compose.yml:
+
+```bash
+nano docker-compose.yml
+```
+
+```yaml
+services:
+  db:
+    image: mysql:8.0.39
+    container_name: lw8-adminer-skin-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - adminer_skin_db:/var/lib/mysql
+    networks:
+      - dbnet
+
+  adminer:
+    image: adminer:4.8.1-standalone
+    container_name: lw8-adminer-skin
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: dracula
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./theme/adminer.css:/var/www/html/adminer.css:ro
+    networks:
+      - dbnet
+      - frontend
+
+volumes:
+  adminer_skin_db:
+
+networks:
+  dbnet:
+    internal: true
+  frontend:
+```
+
+```bash
+docker compose up -d
+```
+
+Открой http://localhost:8085 — Adminer со скином.
+
+---
+
+Итоговая проверка
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+Ссылки для скринов:
+
+Задание URL
+4. Gitea http://localhost:3000
+5. Flame http://localhost:5005
+6. Filebrowser http://localhost:8081
+7. phpMyAdmin http://localhost:8082
+8. phpPgAdmin http://localhost:8083
+9. Adminer http://localhost:8084
+10. Adminer+skin http://localhost:8085
+
+---
+
+Если где-то порт занят
+
+Замени левый порт в ports: на любой свободный, например 8092:80 вместо 8082:80.
+
+Проверить занятые порты:
+
+```bash
+docker ps --format "{{.Ports}}"
+```
+
+---
+
+Ответы на контрольные вопросы (для отчёта)
+
+1. Для чего Docker Compose?
+Для декларативного описания и запуска многоконтейнерных приложений одной командой. Позволяет описать сервисы, сети, тома, зависимости и переменные окружения в одном YAML-файле.
+
+2. В каком формате описывается Compose-проект?
+В формате YAML. Файл обычно называется docker-compose.yml или compose.yaml. Основные секции: services, networks, volumes, configs, secrets.
+
+3. Как запустить несколько экземпляров Compose на одном сервере?
+Через флаг -p (project name):
+
+```bash
+docker compose -p proj1 up -d
+docker compose -p proj2 up -d
+```
+
+Или через переменную COMPOSE_PROJECT_NAME в .env. Каждый проект получит свой префикс для контейнеров, сетей и томов.
+
+4. Базовые команды:
+
+· docker compose up -d — запуск в фоне;
+· docker compose down [-v] — остановка (+ удаление томов);
+· docker compose ps — статус;
+· docker compose logs -f <service> — логи;
+· docker compose exec <service> bash — вход в контейнер;
+· docker compose build — сборка;
+· docker compose pull — загрузка образов;
+· docker compose config — проверка конфига.
+
+5. Способы взаимодействия контейнеров:
+
+· общая пользовательская сеть (bridge) — DNS по имени сервиса;
+· internal: true — изоляция сети без выхода наружу;
+· depends_on — порядок запуска;
+· общие тома — обмен файлами;
+· переменные окружения — передача параметров подключения;
+· secrets и configs — для чувствительных данных.
+
+---
+
+Вывод (для отчёта)
+
+В ходе лабораторной работы освоены практики организации межконтейнерного взаимодействия средствами Docker Compose. Написаны compose-файлы для восьми проектов (2048, Gitea+MySQL, Flame, Filebrowser, phpMyAdmin+MySQL, phpPgAdmin+PostgreSQL, Adminer+MySQL, Adminer со скином). Использованы конкретные теги образов, пользовательские сети с изоляцией (internal: true), тома для персистентности, .env для переменных окружения, локальный реестр образов. Получены навыки управления многоконтейнерными приложениями через команды docker compose up/down/ps/logs/exec.
+
+---
+
+Готово. Иди сверху вниз, копируй блоки. Если где-то вылезет ошибка — присылай скрин, разберём точечно.
