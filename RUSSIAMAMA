@@ -1,0 +1,67 @@
+Понял, берём ровно то, что в ТЗ: темы, материалы, задания, тесты, пользователи и роли. Тест без вопросов и вариантов ответа не обойдётся, поэтому к нему добавляются две связанные таблицы.
+
+## Схема (8 таблиц)
+
+**roles**
+- id: SERIAL (PK)
+- name: VARCHAR(30), уникальное, значения student и teacher
+
+**users**
+- id: SERIAL (PK)
+- login: VARCHAR(50), уникальное
+- password_hash: VARCHAR(100)
+- full_name: VARCHAR(150)
+- role_id: INT (FK → roles)
+
+**topics**
+- id: SERIAL (PK)
+- title: VARCHAR(150)
+- description: TEXT
+
+**materials** (материалы лекций)
+- id: SERIAL (PK)
+- topic_id: INT (FK → topics)
+- title: VARCHAR(200)
+- type: VARCHAR(10), допустимо text, html, rtf, pdf, docx, video, audio
+- content: TEXT, сам текст или html
+- file_url: VARCHAR(500), ссылка или путь для pdf, docx, видео и аудио
+
+**tests**
+- id: SERIAL (PK)
+- topic_id: INT (FK → topics)
+- title: VARCHAR(150)
+- time_limit_sec: INT
+- questions_per_try: INT, по умолчанию 10
+
+**questions** (пул из 20 вопросов)
+- id: SERIAL (PK)
+- test_id: INT (FK → tests)
+- text: TEXT
+- explanation: TEXT
+
+**answer_options** (4 варианта, один правильный)
+- id: SERIAL (PK)
+- question_id: INT (FK → questions)
+- text: VARCHAR(300)
+- is_correct: BOOLEAN
+
+**tasks** (интерактивные задания)
+- id: SERIAL (PK)
+- topic_id: INT (FK → topics)
+- type: VARCHAR(20), допустимо single_choice, multi_choice, ordering, grouping, text_input, matching
+- title: VARCHAR(150)
+- question: TEXT
+- hint: TEXT
+- explanation: TEXT
+- data: JSONB, варианты, группы, порядок или regex в зависимости от типа
+
+## Связи
+- roles → users: 1:N
+- topics → materials, tests, tasks: 1:N
+- tests → questions: 1:N
+- questions → answer_options: 1:N
+
+## Что осталось за скобками
+Прогресс изучения (п. 5.3.2) и результаты тестов можно не хранить в БД. Прогресс считает клиент (страница открыта и сколько секунд), оценка вычисляется при завершении теста. Если преподавателю нужна история, добавляются ещё две таблицы: `material_progress` и `test_results`. Скажи, нужны ли они.
+
+Переписать SQL-скрипт и ERD под эту схему?
