@@ -1,0 +1,61 @@
+import networkx as nx
+import matplotlib.pyplot as plt
+
+G = nx.Graph()
+
+Uzly = [('A', {'koord': (1, 6)}),
+        ('B', {'koord': (1, 3)}),
+        ('C', {'koord': (5, 0)}),
+        ('D', {'koord': (8, 6)}),
+        ('E', {'koord': (7, 0)}),
+        ('F', {'koord': (5, 8)}),
+        ('G', {'koord': (4, 6)}),
+        ('H', {'koord': (8, 3)})]
+
+Dlina = [('A', 'B', {'length': 2}),
+         ('B', 'C', {'length': 3}),
+         ('A', 'C', {'length': 10}),
+         ('B', 'D', {'length': 12}),
+         ('E', 'G', {'length': 7}),
+         ('E', 'C', {'length': 4}),
+         ('F', 'H', {'length': 5}),
+         ('C', 'H', {'length': 5}),
+         ('D', 'F', {'length': 2}),
+         ('A', 'F', {'length': 7}),
+         ('G', 'H', {'length': 6}),
+         ('G', 'B', {'length': 7})]
+
+G.add_nodes_from(Uzly)
+G.add_edges_from(Dlina)
+
+pos = nx.get_node_attributes(G, 'koord')
+labels = nx.get_edge_attributes(G, 'length')
+
+# --- Исходный граф ---
+plt.figure(1)
+nx.draw_networkx(G, pos, node_size=800, font_size=20,
+                 with_labels=True, node_color='y')
+nx.draw_networkx_edge_labels(G, pos, font_size=14, edge_labels=labels)
+plt.gca().margins(0.1)
+plt.axis("off")
+
+# --- а) Кратчайший путь E -> F ---
+print('Кратчайший путь между E и F =',
+      nx.shortest_path(G, 'E', 'F', weight='length'))
+print('Длина кратчайшего пути между E и F =',
+      nx.shortest_path_length(G, 'E', 'F', weight='length'))
+
+# --- б) Минимальный остов ---
+G_min = nx.minimum_spanning_tree(G, weight='length')
+labels_min = nx.get_edge_attributes(G_min, 'length')
+print('Рёбра остова:', list(G_min.edges()))
+print('Длина ВОЛС =', G_min.size(weight='length'))
+
+plt.figure(2)
+nx.draw_networkx(G_min, pos, node_size=800, font_size=20,
+                 node_color='y')
+nx.draw_networkx_edge_labels(G_min, pos, font_size=14,
+                             edge_labels=labels_min)
+plt.gca().margins(0.1)
+plt.axis("off")
+plt.show()
