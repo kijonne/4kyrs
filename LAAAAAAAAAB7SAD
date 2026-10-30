@@ -1,0 +1,401 @@
+Понял, убрал всё лишнее: журнал, кнопку удаления в интерфейсе, `ClearEvents`, `ListEvents`, длинный список в отчёте. Остался только код по пунктам задания.
+
+## 1. Проект и пакет (5.1.1, 5.1.2)
+
+1. Visual Studio → **Создать проект** → **Приложение WPF** (.NET 8) → имя `LabWork7`.
+2. **Сервис → Диспетчер пакетов NuGet → Консоль диспетчера пакетов**:
+
+```
+Install-Package Microsoft.CodeAnalysis.CSharp.Scripting
+```
+
+## 2. Класс события и общий список
+
+ПКМ по проекту → **Добавить → Класс** → `EventItem.cs`:
+
+```csharp
+namespace LabWork7;
+
+public class EventItem
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public DateTime DateTime { get; set; }
+}
+```
+
+Ещё один класс, `EventStore.cs`. Это общий список, который видят и окно, и скрипты:
+
+```csharp
+using System.Collections.ObjectModel;
+
+namespace LabWork7;
+
+public static class EventStore
+{
+    public static ObservableCollection<EventItem> Events { get; } = new();
+    private static int _nextId = 1;
+    public static int NextId() => _nextId++;
+}
+```
+
+## 3. Класс Automation (5.1.3 и 5.4)
+
+Класс `Automation.cs`. Он должен быть `public`. Через `Dispatcher` действия выполняются в потоке окна, иначе команды из канала упадут с ошибкой потока.
+
+```csharp
+using System.Globalization;
+using System.Windows;
+
+namespace LabWork7;
+
+public class Automation
+{
+    private static void Ui(Action a) => Application.Current.Dispatcher.Invoke(a);
+    private static T Ui<T>(Func<T> f) => Application.Current.Dispatcher.Invoke(f);
+
+    private static DateTime Parse(string s) =>
+        DateTime.Parse(s, CultureInfo.GetCultureInfo("ru-RU"));
+
+    // 5.1.3
+    public void Message(string text) => Ui(() => MessageBox.Show(text));
+
+    // 5.4 CRUD
+    // Create
+    public int AddEvent(string title, string description, string dateTime)
+    {
+        var date = Parse(dateTime);
+        return Ui(() =>
+        {
+            var e = new EventItem
+            {
+                Id = EventStore.NextId(),
+                Title = title,
+                Description = description,
+                DateTime = date
+            };
+            EventStore.Events.Add(e);
+            return e.Id;
+        });
+    }
+
+    // Read
+    public string GetEvent(int id) => Ui(() =>
+    {
+        var e = EventStore.Events.First(x => x.Id == id);
+        return $"{e.Id}: {e.DateTime:dd.MM.yyyy HH:mm} {e.Title} - {e.Description}";
+    });
+
+    // Update
+    public void UpdateEvent(int id, string title, string description, string dateTime)
+    {
+        var date = Parse(dateTime);
+        Ui(() =>
+        {
+            var index = EventStore.Events.IndexOf(EventStore.Events.First(x => x.Id == id));
+            EventStore.Events[index] = new EventItem
+            {
+                Id = id,
+                Title = title,
+                Description = description,
+                DateTime = date
+            };
+        });
+    }
+
+    // Delete
+    public void DeleteEvent(int id) => Ui(() =>
+    {
+        EventStore.Events.Remove(EventStore.Events.First(x => x.Id == id));
+    });
+}
+```
+
+## 4. Класс ScriptingHost (5.1.4, 5.1.5, 5.2.1, 5.5)
+
+Класс `ScriptingHost.cs`:
+
+```csharp
+using Microsoft.CodeAnalysis.CSharp.Scripting;
+using Microsoft.CodeAnalysis.Scripting;
+using System.IO;
+using System.IO.Pipes;
+
+namespace LabWork7;
+
+public class ScriptingHost
+{
+    // 5.1.5: приватное поле, инициализация в конструкторе
+    private ScriptOptions scriptOptions;
+
+    public ScriptingHost()
+    {
+        // Фильтр нужен, чтобы не упасть на динамических сборках
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location));
+
+        scriptOptions = ScriptOptions.Default
+            .WithReferences(assemblies)
+            .WithImports("System", "System.Collections.Generic", "System.Linq");
+    }
+
+    // 5.1.4
+    public async Task ExecuteAsync(string code)
+    {
+        await CSharpScript.EvaluateAsync(code, scriptOptions, new Automation());
+    }
+
+    // 5.5: скрипт из текстового файла
+    public async Task ExecuteFileAsync(string path)
+    {
+        string code = await File.ReadAllTextAsync(path);
+        await ExecuteAsync(code);
+    }
+
+    // 5.2.1: сервер именованного канала
+    public async Task Run()
+    {
+        while (true)
+        {
+            using (NamedPipeServerStream server = new NamedPipeServerStream("mypipe", PipeDirection.In))
+            {
+                await server.WaitForConnectionAsync();
+                await HandleClient(server);
+            }
+        }
+    }
+
+    // Читаем команды от клиента построчно и выполняем
+    private async Task HandleClient(NamedPipeServerStream server)
+    {
+        using var reader = new StreamReader(server);
+        string? line;
+        while ((line = await reader.ReadLineAsync()) != null)
+        {
+            try
+            {
+                await ExecuteAsync(line);
+            }
+            catch
+            {
+                // Ошибка в одной команде не должна ронять сервер
+            }
+        }
+    }
+}
+```
+
+## 5. Окно (5.1.6 и 5.3)
+
+`MainWindow.xaml`, **замени всё содержимое**:
+
+```xml
+<Window x:Class="LabWork7.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="LabWork7" Height="550" Width="1000">
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Левая часть: скрипт -->
+        <DockPanel Grid.Column="0" Margin="0,0,10,0">
+            <TextBlock DockPanel.Dock="Top" Text="Скрипт:" Margin="0,0,0,5"/>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Content="Выполнить" Width="100" Padding="5" Click="RunButton_Click"/>
+                <Button Content="Выполнить из файла" Width="150" Padding="5" Margin="10,0,0,0"
+                        Click="RunFileButton_Click"/>
+            </StackPanel>
+            <TextBox x:Name="ScriptTextBox" AcceptsReturn="True" AcceptsTab="True"
+                     FontFamily="Consolas" FontSize="14"
+                     VerticalScrollBarVisibility="Auto"
+                     Text="Message(&quot;Привет&quot;)"/>
+        </DockPanel>
+
+        <!-- Правая часть: события -->
+        <DockPanel Grid.Column="1">
+            <TextBlock DockPanel.Dock="Top" Text="События:" Margin="0,0,0,5"/>
+
+            <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="Название:" Margin="0,0,10,5"/>
+                <TextBox x:Name="TitleBox" Grid.Column="1" Margin="0,0,0,5"/>
+
+                <TextBlock Grid.Row="1" Text="Описание:" Margin="0,0,10,5"/>
+                <TextBox x:Name="DescriptionBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,5"/>
+
+                <TextBlock Grid.Row="2" Text="Дата:" Margin="0,0,10,5"/>
+                <DatePicker x:Name="DateBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,5"/>
+
+                <TextBlock Grid.Row="3" Text="Время:" Margin="0,0,10,5"/>
+                <TextBox x:Name="TimeBox" Grid.Row="3" Grid.Column="1" Text="12:00" Margin="0,0,0,5"/>
+
+                <Button Grid.Row="4" Grid.ColumnSpan="2" Content="Добавить событие"
+                        Padding="5" Click="AddEventButton_Click"/>
+            </Grid>
+
+            <DataGrid x:Name="EventsGrid" AutoGenerateColumns="False"
+                      IsReadOnly="True" CanUserAddRows="False">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="40"/>
+                    <DataGridTextColumn Header="Дата и время"
+                                        Binding="{Binding DateTime, StringFormat=dd.MM.yyyy HH:mm}"
+                                        Width="130"/>
+                    <DataGridTextColumn Header="Название" Binding="{Binding Title}" Width="120"/>
+                    <DataGridTextColumn Header="Описание" Binding="{Binding Description}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </DockPanel>
+    </Grid>
+</Window>
+```
+
+`MainWindow.xaml.cs`, **замени всё содержимое**:
+
+```csharp
+using Microsoft.Win32;
+using System.Windows;
+
+namespace LabWork7;
+
+public partial class MainWindow : Window
+{
+    private readonly ScriptingHost _host = new();
+
+    public MainWindow()
+    {
+        InitializeComponent();
+
+        EventsGrid.ItemsSource = EventStore.Events;
+        DateBox.SelectedDate = DateTime.Today;
+
+        // 5.2.2: сервер канала в отдельном Task
+        Task.Run(() => _host.Run());
+    }
+
+    // 5.1.6: кнопка «Выполнить»
+    private async void RunButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await _host.ExecuteAsync(ScriptTextBox.Text);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Ошибка скрипта");
+        }
+    }
+
+    // 5.5: выполнение скрипта из файла
+    private async void RunFileButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "Текстовые файлы (*.txt)|*.txt|Все файлы|*.*" };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            await _host.ExecuteFileAsync(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Ошибка скрипта");
+        }
+    }
+
+    // 5.3: добавление события через интерфейс
+    private void AddEventButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DateBox.SelectedDate == null || !TimeSpan.TryParse(TimeBox.Text, out var time))
+        {
+            MessageBox.Show("Проверьте дату и время (пример времени: 14:30)");
+            return;
+        }
+
+        EventStore.Events.Add(new EventItem
+        {
+            Id = EventStore.NextId(),
+            Title = TitleBox.Text,
+            Description = DescriptionBox.Text,
+            DateTime = DateBox.SelectedDate.Value.Date + time
+        });
+
+        TitleBox.Clear();
+        DescriptionBox.Clear();
+    }
+}
+```
+
+## 6. Тест скриптов (5.1.7)
+
+Запусти (F5), нажми **Выполнить**: появится окно «Привет». Потом проверь CRUD, вставив в поле:
+
+```csharp
+var id = AddEvent("Встреча", "Обсудить проект", "05.11.2026 14:30");
+UpdateEvent(id, "Встреча (перенос)", "Новое время", "06.11.2026 10:00");
+Message(GetEvent(id));
+DeleteEvent(id);
+```
+
+Событие появится в таблице, изменится и исчезнет.
+
+## 7. Скрипт из файла (5.5)
+
+Создай `script1.txt` с текстом:
+
+```csharp
+AddEvent("Сдать лабу", "Лабораторная №7", "05.11.2026 10:00");
+AddEvent("Экзамен", "Подготовиться", "20.12.2026 09:00");
+```
+
+В программе нажми **Выполнить из файла** и выбери его. События появятся в таблице.
+
+## 8. Клиент для канала (5.2.3, 5.2.4)
+
+ПКМ по решению → **Добавить → Новый проект → Консольное приложение** → имя `PipeClient`. В `Program.cs`:
+
+```csharp
+var pipe = new System.IO.Pipes.NamedPipeClientStream(".", "mypipe", System.IO.Pipes.PipeDirection.Out);
+pipe.Connect();
+var writer = new StreamWriter(pipe);
+writer.WriteLine("Message(\"Hello\")");
+writer.Flush();
+writer.Close();
+pipe.Close();
+```
+
+**Проверка:**
+1. Запусти LabWork7 (ПКМ → *Назначить запускаемым проектом* → F5).
+2. Не закрывая его, запусти клиент: ПКМ по `PipeClient` → *Отладка → Запустить новый экземпляр*.
+3. В LabWork7 появится окно «Hello».
+
+Если клиент завис на `Connect()`, значит LabWork7 не запущен.
+
+---
+
+## Отчёт
+
+**Цель:** изучение процесса разработки ПО с поддержкой внешней интеграции при помощи скриптов.
+
+**Контрольный вопрос: какие способы взаимодействия между приложениями существуют?**
+
+- файлы (одно приложение пишет, другое читает);
+- буфер обмена;
+- именованные и анонимные каналы (Pipes);
+- сокеты (TCP/UDP);
+- общая память (Memory-Mapped Files);
+- очереди сообщений;
+- удалённый вызов процедур (RPC, COM, gRPC);
+- веб-сервисы (HTTP, REST);
+- общая база данных.
+
+**Вывод:** в ходе работы разработано WPF-приложение с поддержкой скриптинга на основе Microsoft.CodeAnalysis.CSharp.Scripting. Реализованы класс Automation с методами для внешнего доступа, класс ScriptingHost для выполнения скриптов, приём команд от внешних программ через именованный канал, выполнение скриптов из файлов и управление событиями (CRUD) с помощью скриптов. Такой подход позволяет менять и автоматизировать поведение программы без перекомпиляции.
